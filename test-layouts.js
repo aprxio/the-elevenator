@@ -6,6 +6,10 @@ var currentLayout = 0;
 var currentMode = 0;
 var currentBase = 48;
 var currentKeysPerOctave = 11;
+var currentQuantize12 = 0;
+var currentDoubleBoundary = 10;
+var currentTrillNotes = 3;
+var currentTrill16ths = 1;
 var sentEvents = [];
 
 global.GetParameter = function (index) {
@@ -13,6 +17,10 @@ global.GetParameter = function (index) {
   if (index === 1) return currentLayout;
   if (index === 2) return currentMode;
   if (index === 3) return currentKeysPerOctave;
+  if (index === 4) return currentQuantize12;
+  if (index === 5) return currentDoubleBoundary;
+  if (index === 6) return currentTrillNotes;
+  if (index === 7) return currentTrill16ths;
   return 0;
 };
 
@@ -84,6 +92,7 @@ function resetState() {
   chordActiveMap = {};
   leastStepCounter = 0;
   mirrorToggle = 0;
+  recentTrillMaps = [];
 }
 
 function centsFromPitchMap(pitchMap) {
@@ -144,6 +153,11 @@ function layoutForPair(layout, mode, count) {
   var cells = [];
   for (var i = 0; i < count; i++) {
     var note = currentBase + i;
+    if (layout === LAYOUT_TRILL_STRUM && isTrillTriggerNote(note)) {
+      cells.push(trillTriggerDirection(note) > 0 ? "trill up" : "trill down");
+      continue;
+    }
+
     var cents = centsFromPitchMap(mapPitch(note, directionFromRecentNotes(note)));
     cells.push(centsLabel(cents));
   }
@@ -256,6 +270,9 @@ function markdownReport() {
     }).join("; "));
   }
   lines.push("- Ratio sanity checks: `" + ratioFailures().length + "` failures.");
+  lines.push("- 12-quantize checks: `" + quantizeFailures().length + "` failures.");
+  lines.push("- Double-boundary checks: `" + boundaryFailures().length + "` failures.");
+  lines.push("- C#/D# trill checks: `" + trillFailures().length + "` failures.");
   lines.push("- Note-off balance checks: `" + noteOffFailures().length + "` failures.");
   lines.push("- `node test-layouts.js --check` fails if any layout/mode pair has 3 or more adjacent same-pitch keys.");
   lines.push("- White Traditional uses 12-key physical white/black geometry.");
@@ -268,8 +285,10 @@ function ratioFailures() {
   var previousMode = currentMode;
   var previousLayout = currentLayout;
   var previousKeysPerOctave = currentKeysPerOctave;
+  var previousQuantize12 = currentQuantize12;
   currentLayout = LAYOUT_CHROMATIC;
   currentMode = MODE_PLAIN;
+  currentQuantize12 = 0;
 
   var ratios = [11, 12, 13];
   for (var i = 0; i < ratios.length; i++) {
@@ -285,6 +304,115 @@ function ratioFailures() {
   currentMode = previousMode;
   currentLayout = previousLayout;
   currentKeysPerOctave = previousKeysPerOctave;
+  currentQuantize12 = previousQuantize12;
+  return failures;
+}
+
+function quantizeFailures() {
+  var failures = [];
+  var previousLayout = currentLayout;
+  var previousMode = currentMode;
+  var previousKeysPerOctave = currentKeysPerOctave;
+  var previousQuantize12 = currentQuantize12;
+
+  currentLayout = LAYOUT_CHROMATIC;
+  currentMode = MODE_PLAIN;
+  currentKeysPerOctave = 11;
+  currentQuantize12 = 1;
+  resetState();
+
+  var mapped = mapPitch(currentBase + 1);
+  if (!mapped || mapped.pitch !== currentBase + 1 || mapped.detune !== 0) {
+    failures.push("quantized key +1 should be MIDI " + (currentBase + 1) + " with 0 detune");
+  }
+
+  currentLayout = previousLayout;
+  currentMode = previousMode;
+  currentKeysPerOctave = previousKeysPerOctave;
+  currentQuantize12 = previousQuantize12;
+  return failures;
+}
+
+function boundaryFailures() {
+  var failures = [];
+  var previousLayout = currentLayout;
+  var previousMode = currentMode;
+  var previousDoubleBoundary = currentDoubleBoundary;
+
+  currentLayout = LAYOUT_PIANIST_COMPAT;
+  currentMode = MODE_PLAIN;
+  for (var boundary = 0; boundary <= 10; boundary++) {
+    currentDoubleBoundary = boundary;
+    resetState();
+    var left = centsLabel(centsFromPitchMap(mapPitch(currentBase + boundary, 1)));
+    var right = centsLabel(centsFromPitchMap(mapPitch(currentBase + boundary + 1, 1)));
+    if (left !== right) {
+      failures.push("boundary " + boundary + " did not duplicate selected pair");
+    }
+  }
+
+  currentLayout = previousLayout;
+  currentMode = previousMode;
+  currentDoubleBoundary = previousDoubleBoundary;
+  return failures;
+}
+
+function sendTestNoteOn(pitch) {
+  var event = new NoteOn();
+  event.pitch = pitch;
+  event.velocity = 100;
+  event.channel = 1;
+  HandleMIDI(event);
+}
+
+function trillFailures() {
+  var failures = [];
+  var previousLayout = currentLayout;
+  var previousMode = currentMode;
+  var previousKeysPerOctave = currentKeysPerOctave;
+  var previousQuantize12 = currentQuantize12;
+  var previousTrillNotes = currentTrillNotes;
+  var previousTrill16ths = currentTrill16ths;
+
+  currentLayout = LAYOUT_TRILL_STRUM;
+  currentMode = MODE_PLAIN;
+  currentKeysPerOctave = 11;
+  currentQuantize12 = 0;
+  currentTrillNotes = 3;
+  currentTrill16ths = 1;
+  resetState();
+
+  sendTestNoteOn(currentBase);
+  sendTestNoteOn(currentBase + 4);
+  sendTestNoteOn(currentBase + 7);
+  sentEvents = [];
+  sendTestNoteOn(currentBase + 1);
+
+  var ups = sentEvents.filter(function (entry) { return entry.type === "on"; });
+  if (ups.length !== 3) {
+    failures.push("C# trigger should send 3 upward notes");
+  } else if (!(ups[0].pitch <= ups[1].pitch && ups[1].pitch <= ups[2].pitch)) {
+    failures.push("C# trigger should sort upward");
+  }
+  if (ups.length >= 3 && (ups[1].delay !== 0.25 || ups[2].delay !== 0.5)) {
+    failures.push("C# trigger should use 16th-note spacing");
+  }
+
+  sentEvents = [];
+  sendTestNoteOn(currentBase + 3);
+  var downs = sentEvents.filter(function (entry) { return entry.type === "on"; });
+  if (downs.length !== 3) {
+    failures.push("D# trigger should send 3 downward notes");
+  } else if (!(downs[0].pitch >= downs[1].pitch && downs[1].pitch >= downs[2].pitch)) {
+    failures.push("D# trigger should sort downward");
+  }
+
+  currentLayout = previousLayout;
+  currentMode = previousMode;
+  currentKeysPerOctave = previousKeysPerOctave;
+  currentQuantize12 = previousQuantize12;
+  currentTrillNotes = previousTrillNotes;
+  currentTrill16ths = previousTrill16ths;
   return failures;
 }
 
@@ -370,6 +498,9 @@ if (process.argv.indexOf("--markdown") !== -1) {
   currentKeysPerOctave = 11;
   var longRuns = allExtendedRuns(3);
   var ratioProblems = ratioFailures();
+  var quantizeProblems = quantizeFailures();
+  var boundaryProblems = boundaryFailures();
+  var trillProblems = trillFailures();
   var noteOffProblems = noteOffFailures();
 
   if (longRuns.length > 0) {
@@ -380,6 +511,18 @@ if (process.argv.indexOf("--markdown") !== -1) {
 
   if (ratioProblems.length > 0) {
     failures.push("Ratio checks failed: " + ratioProblems.join(", "));
+  }
+
+  if (quantizeProblems.length > 0) {
+    failures.push("12-quantize checks failed: " + quantizeProblems.join(", "));
+  }
+
+  if (boundaryProblems.length > 0) {
+    failures.push("Double-boundary checks failed: " + boundaryProblems.join(", "));
+  }
+
+  if (trillProblems.length > 0) {
+    failures.push("C#/D# trill checks failed: " + trillProblems.join(", "));
   }
 
   if (noteOffProblems.length > 0) {

@@ -4,6 +4,7 @@ var PARAM_BASE_NOTE = 0;
 var PARAM_LAYOUT = 1;
 var PARAM_MODE = 2;
 var PARAM_KEYS_PER_OCTAVE = 3;
+var PARAM_QUANTIZE_12 = 4;
 
 var LAYOUT_NAMES = [
   "Chromatic Ratio",
@@ -18,7 +19,9 @@ var LAYOUT_NAMES = [
   "White Util: Direction",
   "White Util: Direction Invert",
   "White Util: Least Used",
-  "White Util: Least Used Invert"
+  "White Util: Least Used Invert",
+  "Pianist Compatibility",
+  "C#/D# Trill Strum"
 ];
 
 var MODE_NAMES = [
@@ -61,6 +64,8 @@ var LAYOUT_WHITE_UTIL_DIR = 9;
 var LAYOUT_WHITE_UTIL_DIR_INV = 10;
 var LAYOUT_WHITE_UTIL_LEAST = 11;
 var LAYOUT_WHITE_UTIL_LEAST_INV = 12;
+var LAYOUT_PIANIST_COMPAT = 13;
+var LAYOUT_TRILL_STRUM = 14;
 
 var MODE_PLAIN = 0;
 var MODE_REVERSE = 1;
@@ -115,7 +120,14 @@ var PluginParameters = [
     maxValue: 24,
     numberOfSteps: 19,
     defaultValue: 11
-  }
+  },
+  {
+    name: "12 Quantize",
+    type: "menu",
+    valueStrings: ["Off", "On"],
+    defaultValue: 0
+  },
+  
 ];
 
 function floorDiv(a, b) {
@@ -150,6 +162,10 @@ function makePitchMap(pitch, detune) {
 function pitchMapFromFloat(pitchFloat) {
   if (pitchFloat < 0 || pitchFloat > 127) {
     return null;
+  }
+
+  if (getQuantize12()) {
+    return makePitchMap(Math.round(pitchFloat), 0);
   }
 
   var roundedPitch = Math.round(pitchFloat);
@@ -249,6 +265,15 @@ function sendMappedNoteOff(channel, velocity, mapped, delayBeats) {
   return true;
 }
 
+function channelFromKey(key) {
+  var parts = key.split(":");
+  var channel = parseInt(parts[0], 10);
+  if (isNaN(channel)) {
+    return 1;
+  }
+  return channel;
+}
+
 function getBaseNote() {
   return Math.round(GetParameter(PARAM_BASE_NOTE));
 }
@@ -273,6 +298,11 @@ function getRatioStepSemitones() {
   return SEMITONES_PER_OCTAVE / getKeysPerOctave();
 }
 
+function getQuantize12() {
+  return Math.round(GetParameter(PARAM_QUANTIZE_12)) === 1;
+}
+
+
 var WHITE_TRAD_INPUT_OFFSETS = [0, 2, 4, 5, 7, 9, 11];
 var WHITE_TRAD_ELEVEN_STEPS = [0, 2, 4, 5, 7, 9, 11];
 var WHITE_UTIL_INPUT_OFFSETS = [0, 2, 4, 5, 6, 8, 10];
@@ -288,6 +318,8 @@ var lastNoteOn = null;
 var recentNoteOns = [];
 var activeMap = {};
 var leastStepCounter = 0;
+var recentTrillMaps = [];
+var TRILL_BUFFER_SIZE = 16;
 
 // Multi-note state for chord, strum and echo modes.
 var chordActiveMap = {};
@@ -308,6 +340,28 @@ var SPIRAL_ECHO_COUNT = 4;
 var SPIRAL_ECHO_DELAY_BEATS = 1 / 11;
 var SPIRAL_ECHO_DURATION_BEATS = 0.22;
 var CHANCE_COMPANION_STEPS = [-11, -6, -3, 3, 6, 9, 11];
+var TRILL_REVERB_CC = 91;
+var TRILL_REVERB_VALUE = 60;
+var TRILL_FADE_STEPS = 3;
+var TRILL_FADE_BEAT_STEP = 0.06;
+var TRILL_FADE_START_VALUE = 100;
+
+function releaseAllActiveNotes() {
+  for (var key in activeMap) {
+    if (!activeMap.hasOwnProperty(key)) continue;
+    sendMappedNoteOff(channelFromKey(key), 0, activeMap[key], 0);
+  }
+  activeMap = {};
+
+  for (var chordKey in chordActiveMap) {
+    if (!chordActiveMap.hasOwnProperty(chordKey)) continue;
+    var maps = chordActiveMap[chordKey];
+    for (var i = 0; i < maps.length; i++) {
+      sendMappedNoteOff(channelFromKey(chordKey), 0, maps[i], 0);
+    }
+  }
+  chordActiveMap = {};
+}
 
 function isTraditionalWhiteLayout(layout) {
   return layout === LAYOUT_WHITE_TRAD_SAFE;
@@ -372,6 +426,82 @@ function rememberNoteOn(noteNumber) {
   if (recentNoteOns.length > 2) {
     recentNoteOns.shift();
   }
+}
+
+function rememberTrillMap(mapped) {
+  var pitchMap = normalizePitchMap(mapped);
+  if (pitchMap === null) {
+    return;
+  }
+
+  recentTrillMaps.push(pitchMap);
+  if (recentTrillMaps.length > TRILL_BUFFER_SIZE) {
+    recentTrillMaps.shift();
+  }
+}
+
+
+function isTrillTriggerNote(noteNumber) {
+  if (getLayout() !== LAYOUT_TRILL_STRUM) {
+    return false;
+  }
+
+  var semitone = mod(noteNumber - getBaseNote(), SEMITONES_PER_OCTAVE);
+  return semitone === 1 || semitone === 3;
+}
+
+function trillTriggerDirection(noteNumber) {
+  var semitone = mod(noteNumber - getBaseNote(), SEMITONES_PER_OCTAVE);
+  return semitone === 1 ? 1 : -1;
+}
+
+function sendControlChange(channel, number, value, delayBeats) {
+  var cc = new ControlChange();
+  cc.channel = channel;
+  cc.number = number;
+  cc.value = value;
+  if (delayBeats && delayBeats > 0) {
+    cc.sendAfterBeats(delayBeats);
+  } else {
+    cc.send();
+  }
+}
+
+function lastAccentMap() {
+  if (recentTrillMaps.length === 0) {
+    return null;
+  }
+  return recentTrillMaps[recentTrillMaps.length - 1];
+}
+
+function octaveShiftMap(mapped, direction) {
+  var pitchMap = normalizePitchMap(mapped);
+  if (pitchMap === null) {
+    return null;
+  }
+  return makePitchMap(pitchMap.pitch + direction * SEMITONES_PER_OCTAVE, pitchMap.detune);
+}
+
+function handleTrillTrigger(event) {
+  var accentMap = lastAccentMap();
+  if (accentMap === null) {
+    return;
+  }
+
+  var shifted = octaveShiftMap(accentMap, trillTriggerDirection(event.pitch));
+  if (shifted === null) {
+    return;
+  }
+
+  sendControlChange(event.channel, TRILL_REVERB_CC, TRILL_REVERB_VALUE, 0);
+  sendMappedNoteOn(event.channel, event.velocity, shifted, 0);
+
+  for (var i = 0; i < TRILL_FADE_STEPS; i++) {
+    var value = Math.round(TRILL_FADE_START_VALUE * (1 - (i + 1) / TRILL_FADE_STEPS));
+    sendControlChange(event.channel, 11, value, (i + 1) * TRILL_FADE_BEAT_STEP);
+  }
+  sendMappedNoteOff(event.channel, 0, shifted, TRILL_FADE_STEPS * TRILL_FADE_BEAT_STEP);
+  sendControlChange(event.channel, 11, 127, TRILL_FADE_STEPS * TRILL_FADE_BEAT_STEP + 0.01);
 }
 
 function directionFromRecentNotes(currentPitch) {
@@ -556,10 +686,30 @@ function mapWhiteKeysStepIndex(noteNumber, layout, direction) {
   return (octave + extraOctave) * ELEVEN_STEPS_PER_OCTAVE + targetOffset;
 }
 
+function mapPianistCompatStepIndex(noteNumber) {
+  var inputIndex = noteNumber - getBaseNote();
+  var octave = floorDiv(inputIndex, SEMITONES_PER_OCTAVE);
+  var semitone = mod(inputIndex, SEMITONES_PER_OCTAVE);
+  if (semitone === 11) {
+    return (octave + 1) * ELEVEN_STEPS_PER_OCTAVE;
+  }
+  return octave * ELEVEN_STEPS_PER_OCTAVE + semitone;
+}
+
+function mapTrillStrumStepIndex(noteNumber) {
+  return noteNumber - getBaseNote();
+}
+
 function mapLayoutStepIndex(noteNumber, direction) {
   var layout = getLayout();
   if (layout === LAYOUT_CHROMATIC) {
     return noteNumber - getBaseNote();
+  }
+  if (layout === LAYOUT_PIANIST_COMPAT) {
+    return mapPianistCompatStepIndex(noteNumber);
+  }
+  if (layout === LAYOUT_TRILL_STRUM) {
+    return mapTrillStrumStepIndex(noteNumber);
   }
 
   return mapWhiteKeysStepIndex(noteNumber, layout, direction);
@@ -733,6 +883,9 @@ function handleMultiNoteOn(event) {
   }
 
   chordActiveMap[noteKey(event)] = tiedMaps;
+  if (tiedMaps.length > 0) {
+    rememberTrillMap(tiedMaps[0]);
+  }
   rememberNoteOn(rootPitch);
 }
 
@@ -753,6 +906,12 @@ function HandleMIDI(event) {
     var mode = getMode();
     var layout = getLayout();
     var key = noteKey(event);
+
+    if (isTrillTriggerNote(event.pitch)) {
+      handleTrillTrigger(event);
+      return;
+    }
+
     recordWhiteNote(event.pitch);
 
     if (isMultiNoteMode(mode)) {
@@ -770,6 +929,7 @@ function HandleMIDI(event) {
       activeMap[key] = normalizePitchMap(mappedPitch);
     }
     rememberNoteOn(event.pitch);
+    rememberTrillMap(mappedPitch);
 
     if (!applyPitchMapToNoteOn(event, mappedPitch)) {
       return;
@@ -780,6 +940,10 @@ function HandleMIDI(event) {
 
   if (event instanceof NoteOff) {
     var offKey = noteKey(event);
+    if (isTrillTriggerNote(event.pitch)) {
+      return;
+    }
+
     if (chordActiveMap.hasOwnProperty(offKey)) {
       handleMultiNoteOff(event);
       return;
@@ -801,4 +965,14 @@ function HandleMIDI(event) {
   }
 
   event.send();
+}
+
+function ParameterChanged(param, value) {
+  if (param === PARAM_KEYS_PER_OCTAVE
+      || param === PARAM_BASE_NOTE
+      || param === PARAM_LAYOUT
+      || param === PARAM_MODE
+      || param === PARAM_QUANTIZE_12) {
+    releaseAllActiveNotes();
+  }
 }

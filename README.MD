@@ -17,6 +17,10 @@ Elevenator is a Logic Pro Scripter plugin that lets you choose how many physical
 - **Layout:** Chromatic Ratio, White Traditional, or one of the White Util layouts.
 - **Mode:** Basic 11 Semitone, Reverse, Invert, harmony, chord, echo, or chaos processing.
 - **Keys Per Octave:** The physical-key ratio for the octave span. `11` is the Elevenator default, `12` is the normal keyboard span, and values like `10` or `13` create more stretched or compressed tunings.
+- **12 Quantize:** Rounds every output to ordinary 12-TET MIDI notes with no detune.
+- **Double Boundary:** Chooses the duplicated adjacent key pair in Pianist Compatibility layout. `0` duplicates C/C#, `10` duplicates A#/B.
+- **Trill Notes:** Number of recent notes replayed by the C#/D# Trill Strum layout. Default is `3`.
+- **Trill 16ths:** Spacing and note length for C#/D# Trill Strum, measured in 16th notes. Default is `1`.
 
 ## Usage
 
@@ -47,6 +51,8 @@ There are two white-key families. Traditional keeps the physical 12-key white/bl
 - **White Util: Direction Invert** flips the direction rule for the same motion.
 - **White Util: Least Used** maps utility keys to the least-used spine step in recent memory.
 - **White Util: Least Used Invert** maps utility keys to the most-used spine step.
+- **Pianist Compatibility** keeps a 12-key physical octave but fits it onto the 11-step scale by duplicating one user-selected adjacent boundary.
+- **C#/D# Trill Strum** keeps the basic 11-semitone layout, except C# replays the last notes upward and D# replays them downward as a timed trill/strum.
 
 ### Chord Modes
 
