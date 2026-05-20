@@ -2,6 +2,7 @@
 
 var fs = require("fs");
 
+var currentLayout = 0;
 var currentMode = 0;
 var currentBase = 48;
 var currentKeysPerOctave = 11;
@@ -9,8 +10,9 @@ var sentEvents = [];
 
 global.GetParameter = function (index) {
   if (index === 0) return currentBase;
-  if (index === 1) return currentMode;
-  if (index === 2) return currentKeysPerOctave;
+  if (index === 1) return currentLayout;
+  if (index === 2) return currentMode;
+  if (index === 3) return currentKeysPerOctave;
   return 0;
 };
 
@@ -108,13 +110,13 @@ function deterministicRandomForMode(mode) {
   return 0.5;
 }
 
-function primeModeState(mode) {
-  if (mode === MODE_WHITE_UTIL_DIR || mode === MODE_WHITE_UTIL_DIR_INV) {
+function primeLayoutState(layout) {
+  if (layout === LAYOUT_WHITE_UTIL_DIR || layout === LAYOUT_WHITE_UTIL_DIR_INV) {
     rememberNoteOn(currentBase);
     rememberNoteOn(currentBase + 2);
   }
 
-  if (mode === MODE_WHITE_UTIL_LEAST || mode === MODE_WHITE_UTIL_LEAST_INV) {
+  if (layout === LAYOUT_WHITE_UTIL_LEAST || layout === LAYOUT_WHITE_UTIL_LEAST_INV) {
     recordWhiteNote(currentBase);
     recordWhiteNote(currentBase + 2);
     recordWhiteNote(currentBase + 4);
@@ -122,18 +124,19 @@ function primeModeState(mode) {
   }
 }
 
-function primaryLayoutForMode(mode) {
-  return layoutForMode(mode, 12);
+function primaryLayoutForPair(layout, mode) {
+  return layoutForPair(layout, mode, 12);
 }
 
-function extendedLayoutForMode(mode) {
-  return layoutForMode(mode, EXTENDED_KEY_COUNT);
+function extendedLayoutForPair(layout, mode) {
+  return layoutForPair(layout, mode, EXTENDED_KEY_COUNT);
 }
 
-function layoutForMode(mode, count) {
+function layoutForPair(layout, mode, count) {
+  currentLayout = layout;
   currentMode = mode;
   resetState();
-  primeModeState(mode);
+  primeLayoutState(layout);
   Math.random = function () {
     return deterministicRandomForMode(mode);
   };
@@ -141,27 +144,17 @@ function layoutForMode(mode, count) {
   var cells = [];
   for (var i = 0; i < count; i++) {
     var note = currentBase + i;
-    var cents;
-    if (isMultiNoteMode(mode)) {
-      var intervals = chordIntervalsForMode(mode);
-      if (intervals && intervals.length > 0) {
-        cents = centsFromPitchMap(elevenPitchMapForStepOffset(note, intervals[0]));
-      } else {
-        cents = centsFromPitchMap(mapElevenator(note));
-      }
-    } else if (mode === MODE_WHITE_UTIL_DIR || mode === MODE_WHITE_UTIL_DIR_INV) {
-      cents = centsFromPitchMap(mapPitchWithDirection(note, directionFromRecentNotes(note)));
-    } else {
-      cents = centsFromPitchMap(mapPitch(note));
-    }
+    var cents = centsFromPitchMap(mapPitch(note, directionFromRecentNotes(note)));
     cells.push(centsLabel(cents));
   }
   return cells;
 }
 
-function voicesForMode(mode, note) {
+function voicesForPair(layout, mode, note) {
+  currentLayout = layout;
   currentMode = mode;
   resetState();
+  primeLayoutState(layout);
   Math.random = function () {
     return 0.5;
   };
@@ -176,10 +169,10 @@ function voicesForMode(mode, note) {
       .filter(function (entry) { return entry.type === "on"; })
       .map(function (entry) {
         return centsLabel(entry.pitch * 100 + entry.detune) + (entry.delay ? " @" + entry.delay + "b" : "");
-      });
+    });
   }
 
-  return [primaryLayoutForMode(mode)[note - currentBase]];
+  return [primaryLayoutForPair(layout, mode)[note - currentBase]];
 }
 
 function repeatedRuns(layout) {
@@ -208,16 +201,18 @@ function keyLabel(index) {
   return label + "+" + octave;
 }
 
-function modeReport(mode) {
-  var layout = primaryLayoutForMode(mode);
-  var extendedLayout = extendedLayoutForMode(mode);
+function pairReport(layout, mode) {
+  var keyLayout = primaryLayoutForPair(layout, mode);
+  var extendedLayout = extendedLayoutForPair(layout, mode);
   return {
-    mode: mode,
-    name: MODE_NAMES[mode],
     layout: layout,
-    repeats: repeatedRuns(layout),
+    mode: mode,
+    layoutName: LAYOUT_NAMES[layout],
+    name: MODE_NAMES[mode],
+    keyLayout: keyLayout,
+    repeats: repeatedRuns(keyLayout),
     extendedRepeats: repeatedRuns(extendedLayout),
-    voices: voicesForMode(mode, currentBase)
+    voices: voicesForPair(layout, mode, currentBase)
   };
 }
 
@@ -233,33 +228,36 @@ function markdownReport() {
   lines.push("- C..B shows twelve traditional physical keys so duplicate/reset behavior is visible.");
   lines.push("- Extended repeat checks scan " + EXTENDED_KEY_COUNT + " physical keys, so B -> next C boundary problems are visible.");
   lines.push("- Multi-note modes list the primary root layout, then voices produced by C.");
-  lines.push("- Direction mode is primed with ascending C -> D motion.");
+  lines.push("- Direction layouts are primed with ascending C -> D motion.");
   lines.push("- Random modes use deterministic midpoint randomness.");
   lines.push("");
-  lines.push("| # | Mode | C | C# | D | D# | E | F | F# | G | G# | A | A# | B | Adjacent repeats | C voices |");
-  lines.push("|---:|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|");
+  lines.push("| Layout | Mode | C | C# | D | D# | E | F | F# | G | G# | A | A# | B | Adjacent repeats | C voices |");
+  lines.push("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|");
 
-  for (var mode = 0; mode < MODE_NAMES.length; mode++) {
-    var report = modeReport(mode);
-    var repeats = report.repeats.map(function (run) {
-      return run.from + "-" + run.to + " x" + run.count + " " + run.value;
-    }).join("<br>");
-    if (!repeats) repeats = "";
-    lines.push("| " + report.mode + " | " + report.name + " | " + report.layout.join(" | ") + " | " + repeats + " | " + report.voices.join("<br>") + " |");
+  for (var layout = 0; layout < LAYOUT_NAMES.length; layout++) {
+    for (var mode = 0; mode < MODE_NAMES.length; mode++) {
+      var report = pairReport(layout, mode);
+      var repeats = report.repeats.map(function (run) {
+        return run.from + "-" + run.to + " x" + run.count + " " + run.value;
+      }).join("<br>");
+      if (!repeats) repeats = "";
+      lines.push("| " + report.layoutName + " | " + report.name + " | " + report.keyLayout.join(" | ") + " | " + repeats + " | " + report.voices.join("<br>") + " |");
+    }
   }
 
   lines.push("");
   lines.push("## Checks");
   lines.push("");
   var allLongRuns = allExtendedRuns(3);
-  lines.push("- Static modes with adjacent runs >= 3 over " + EXTENDED_KEY_COUNT + " keys: `" + allLongRuns.length + "`.");
+  lines.push("- Layout/mode pairs with adjacent runs >= 3 over " + EXTENDED_KEY_COUNT + " keys: `" + allLongRuns.length + "`.");
   if (allLongRuns.length > 0) {
     lines.push("- Long-run patterns: " + allLongRuns.map(function (run) {
       return run.mode + " " + run.from + "-" + run.to + " x" + run.count + " " + run.value;
     }).join("; "));
   }
   lines.push("- Ratio sanity checks: `" + ratioFailures().length + "` failures.");
-  lines.push("- `node test-layouts.js --check` fails if any static mode has 3 or more adjacent same-pitch keys.");
+  lines.push("- Note-off balance checks: `" + noteOffFailures().length + "` failures.");
+  lines.push("- `node test-layouts.js --check` fails if any layout/mode pair has 3 or more adjacent same-pitch keys.");
   lines.push("- White Traditional uses 12-key physical white/black geometry.");
   lines.push("- White Util modes use the compact 11-key utility spine.");
   return lines.join("\n") + "\n";
@@ -268,8 +266,10 @@ function markdownReport() {
 function ratioFailures() {
   var failures = [];
   var previousMode = currentMode;
+  var previousLayout = currentLayout;
   var previousKeysPerOctave = currentKeysPerOctave;
-  currentMode = MODE_ELEVENATOR;
+  currentLayout = LAYOUT_CHROMATIC;
+  currentMode = MODE_PLAIN;
 
   var ratios = [11, 12, 13];
   for (var i = 0; i < ratios.length; i++) {
@@ -283,27 +283,84 @@ function ratioFailures() {
   }
 
   currentMode = previousMode;
+  currentLayout = previousLayout;
   currentKeysPerOctave = previousKeysPerOctave;
   return failures;
 }
 
 function allExtendedRuns(minCount) {
   var runs = [];
-  for (var mode = 0; mode < MODE_NAMES.length; mode++) {
-    var report = modeReport(mode);
-    for (var i = 0; i < report.extendedRepeats.length; i++) {
-      if (report.extendedRepeats[i].count >= minCount) {
-        runs.push({
-          mode: report.name,
-          from: report.extendedRepeats[i].from,
-          to: report.extendedRepeats[i].to,
-          count: report.extendedRepeats[i].count,
-          value: report.extendedRepeats[i].value
-        });
+  for (var layout = 0; layout < LAYOUT_NAMES.length; layout++) {
+    for (var mode = 0; mode < MODE_NAMES.length; mode++) {
+      var report = pairReport(layout, mode);
+      for (var i = 0; i < report.extendedRepeats.length; i++) {
+        if (report.extendedRepeats[i].count >= minCount) {
+          runs.push({
+            layout: report.layoutName,
+            mode: report.name,
+            from: report.extendedRepeats[i].from,
+            to: report.extendedRepeats[i].to,
+            count: report.extendedRepeats[i].count,
+            value: report.extendedRepeats[i].value
+          });
+        }
       }
     }
   }
   return runs;
+}
+
+function noteOffFailures() {
+  var failures = [];
+  var previousLayout = currentLayout;
+  var previousMode = currentMode;
+
+  for (var layout = 0; layout < LAYOUT_NAMES.length; layout++) {
+    for (var mode = 0; mode < MODE_NAMES.length; mode++) {
+      currentLayout = layout;
+      currentMode = mode;
+      resetState();
+      primeLayoutState(layout);
+      Math.random = function () {
+        return deterministicRandomForMode(mode);
+      };
+
+      var noteOn = new NoteOn();
+      noteOn.pitch = currentBase;
+      noteOn.velocity = 100;
+      noteOn.channel = 1;
+      HandleMIDI(noteOn);
+
+      var noteOff = new NoteOff();
+      noteOff.pitch = currentBase;
+      noteOff.velocity = 0;
+      noteOff.channel = 1;
+      HandleMIDI(noteOff);
+
+      var balance = {};
+      for (var i = 0; i < sentEvents.length; i++) {
+        var key = sentEvents[i].pitch;
+        if (!balance.hasOwnProperty(key)) {
+          balance[key] = 0;
+        }
+        if (sentEvents[i].type === "on") {
+          balance[key] += 1;
+        } else if (sentEvents[i].type === "off") {
+          balance[key] -= 1;
+        }
+      }
+
+      for (var pitch in balance) {
+        if (balance.hasOwnProperty(pitch) && balance[pitch] !== 0) {
+          failures.push(LAYOUT_NAMES[layout] + " / " + MODE_NAMES[mode] + " leaves pitch " + pitch + " balance " + balance[pitch]);
+        }
+      }
+    }
+  }
+
+  currentLayout = previousLayout;
+  currentMode = previousMode;
+  return failures;
 }
 
 if (process.argv.indexOf("--markdown") !== -1) {
@@ -313,15 +370,20 @@ if (process.argv.indexOf("--markdown") !== -1) {
   currentKeysPerOctave = 11;
   var longRuns = allExtendedRuns(3);
   var ratioProblems = ratioFailures();
+  var noteOffProblems = noteOffFailures();
 
   if (longRuns.length > 0) {
-    failures.push("Static modes have adjacent repeated pitch runs >= 3: " + longRuns.map(function (run) {
-      return run.mode + " " + run.from + "-" + run.to + " " + run.value;
+    failures.push("Layout/mode pairs have adjacent repeated pitch runs >= 3: " + longRuns.map(function (run) {
+      return run.layout + " / " + run.mode + " " + run.from + "-" + run.to + " " + run.value;
     }).join(", "));
   }
 
   if (ratioProblems.length > 0) {
     failures.push("Ratio checks failed: " + ratioProblems.join(", "));
+  }
+
+  if (noteOffProblems.length > 0) {
+    failures.push("Note-off balance failed: " + noteOffProblems.join(", "));
   }
 
   if (failures.length > 0) {
@@ -333,16 +395,18 @@ if (process.argv.indexOf("--markdown") !== -1) {
 
   console.log("layout checks passed");
 } else {
-  for (var mode = 0; mode < MODE_NAMES.length; mode++) {
-    var report = modeReport(mode);
-    console.log(mode + ": " + report.name);
-    console.log("  " + KEY_LABELS_12.join(" | "));
-    console.log("  " + report.layout.join(" | "));
-    if (report.repeats.length > 0) {
-      console.log("  repeats: " + report.repeats.map(function (run) {
-        return run.from + "-" + run.to + " x" + run.count + " " + run.value;
-      }).join(", "));
+  for (var layout = 0; layout < LAYOUT_NAMES.length; layout++) {
+    for (var mode = 0; mode < MODE_NAMES.length; mode++) {
+      var report = pairReport(layout, mode);
+      console.log(report.layoutName + " / " + report.name);
+      console.log("  " + KEY_LABELS_12.join(" | "));
+      console.log("  " + report.keyLayout.join(" | "));
+      if (report.repeats.length > 0) {
+        console.log("  repeats: " + report.repeats.map(function (run) {
+          return run.from + "-" + run.to + " x" + run.count + " " + run.value;
+        }).join(", "));
+      }
+      console.log("  C voices: " + report.voices.join(", "));
     }
-    console.log("  C voices: " + report.voices.join(", "));
   }
 }
