@@ -7,17 +7,18 @@ var MODE_NAMES = [
   "Elevenator (11-EDO)",
   "Elevenator Reverse (11-EDO)",
   "Elevenator Invert (11-EDO)",
-  "White Keys: Down",
-  "White Keys: Up",
-  "White Keys: Zigzag",
-  "White Keys: Thirds",
-  "White Keys: Fifths",
-  "White Keys: Mirror",
-  "White Keys: Octave Up",
-  "White Keys: Direction",
-  "White Keys: Direction Invert",
-  "White Keys: Least Used",
-  "White Keys: Least Used Invert",
+  "White Traditional: Safe",
+  "White Util: Down",
+  "White Util: Up",
+  "White Util: Zigzag",
+  "White Util: Thirds",
+  "White Util: Fifths",
+  "White Util: Mirror",
+  "White Util: Octave Up",
+  "White Util: Direction",
+  "White Util: Direction Invert",
+  "White Util: Least Used",
+  "White Util: Least Used Invert",
   "Chord: Major",
   "Chord: Minor",
   "Chord: Power 5",
@@ -29,7 +30,7 @@ var MODE_NAMES = [
   "Octave Spray",
   "Negative Harmony",
   "Whole Tone Lock",
-  "Pentatonic Lock",
+  "Pentatonic Climb",
   "Drunk Pianist",
   "Mirror Trick",
   "Strum: Major Up",
@@ -44,38 +45,39 @@ var MODE_NAMES = [
 var MODE_ELEVENATOR = 0;
 var MODE_ELEVENATOR_REVERSE = 1;
 var MODE_ELEVENATOR_INVERT = 2;
-var MODE_WHITE_DOWN = 3;
-var MODE_WHITE_UP = 4;
-var MODE_WHITE_ZIGZAG = 5;
-var MODE_WHITE_THIRDS = 6;
-var MODE_WHITE_FIFTHS = 7;
-var MODE_WHITE_MIRROR = 8;
-var MODE_WHITE_OCTAVE_UP = 9;
-var MODE_WHITE_DIR = 10;
-var MODE_WHITE_DIR_INV = 11;
-var MODE_WHITE_LEAST = 12;
-var MODE_WHITE_LEAST_INV = 13;
-var MODE_CHORD_MAJOR = 14;
-var MODE_CHORD_MINOR = 15;
-var MODE_CHORD_POWER = 16;
-var MODE_CHORD_SUS4 = 17;
-var MODE_CHORD_MAJ7 = 18;
-var MODE_CHORD_MIN7 = 19;
-var MODE_CHORD_QUARTAL = 20;
-var MODE_CHORD_BIG_HANDS = 21;
-var MODE_OCTAVE_SPRAY = 22;
-var MODE_NEGATIVE_HARMONY = 23;
-var MODE_WHOLE_TONE = 24;
-var MODE_PENTATONIC = 25;
-var MODE_DRUNK = 26;
-var MODE_MIRROR_TRICK = 27;
-var MODE_STRUM_MAJOR = 28;
-var MODE_ECHO_CASCADE = 29;
-var MODE_CHORD_DOM9 = 30;
-var MODE_CHORD_CLUSTER = 31;
-var MODE_STRUM_ELEVEN_FAN = 32;
-var MODE_ECHO_SPIRAL = 33;
-var MODE_CHANCE_COMPANION = 34;
+var MODE_WHITE_TRAD_SAFE = 3;
+var MODE_WHITE_UTIL_DOWN = 4;
+var MODE_WHITE_UTIL_UP = 5;
+var MODE_WHITE_UTIL_ZIGZAG = 6;
+var MODE_WHITE_UTIL_THIRDS = 7;
+var MODE_WHITE_UTIL_FIFTHS = 8;
+var MODE_WHITE_UTIL_MIRROR = 9;
+var MODE_WHITE_UTIL_OCTAVE_UP = 10;
+var MODE_WHITE_UTIL_DIR = 11;
+var MODE_WHITE_UTIL_DIR_INV = 12;
+var MODE_WHITE_UTIL_LEAST = 13;
+var MODE_WHITE_UTIL_LEAST_INV = 14;
+var MODE_CHORD_MAJOR = 15;
+var MODE_CHORD_MINOR = 16;
+var MODE_CHORD_POWER = 17;
+var MODE_CHORD_SUS4 = 18;
+var MODE_CHORD_MAJ7 = 19;
+var MODE_CHORD_MIN7 = 20;
+var MODE_CHORD_QUARTAL = 21;
+var MODE_CHORD_BIG_HANDS = 22;
+var MODE_OCTAVE_SPRAY = 23;
+var MODE_NEGATIVE_HARMONY = 24;
+var MODE_WHOLE_TONE = 25;
+var MODE_PENTATONIC = 26;
+var MODE_DRUNK = 27;
+var MODE_MIRROR_TRICK = 28;
+var MODE_STRUM_MAJOR = 29;
+var MODE_ECHO_CASCADE = 30;
+var MODE_CHORD_DOM9 = 31;
+var MODE_CHORD_CLUSTER = 32;
+var MODE_STRUM_ELEVEN_FAN = 33;
+var MODE_ECHO_SPIRAL = 34;
+var MODE_CHANCE_COMPANION = 35;
 
 var PluginParameters = [
   {
@@ -229,8 +231,10 @@ function getMode() {
   return Math.round(GetParameter(PARAM_MODE));
 }
 
-var WHITE_KEY_INPUT_OFFSETS = [0, 2, 4, 5, 6, 8, 10];
-var WHITE_KEY_ELEVEN_STEPS = [0, 2, 4, 5, 6, 8, 10];
+var WHITE_TRAD_INPUT_OFFSETS = [0, 2, 4, 5, 7, 9, 11];
+var WHITE_TRAD_ELEVEN_STEPS = [0, 2, 4, 5, 7, 9, 11];
+var WHITE_UTIL_INPUT_OFFSETS = [0, 2, 4, 5, 6, 8, 10];
+var WHITE_UTIL_ELEVEN_STEPS = [0, 2, 4, 5, 6, 8, 10];
 var WHITE_BUFFER_SIZE = 16;
 var SEMITONES_PER_OCTAVE = 12;
 var ELEVEN_STEPS_PER_OCTAVE = 11;
@@ -251,7 +255,7 @@ var chordActiveMap = {};
 var mirrorToggle = 0;
 
 var SCALE_WHOLE_TONE = [0, 2, 4, 6, 8, 10];
-var SCALE_PENTATONIC_MINOR = [0, 3, 5, 6, 9];
+var PENTATONIC_CLIMB_STEPS = [0, 0, 3, 3, 5, 6, 6, 9, 9, 11, 14];
 
 // Time-based mode constants (all tempo-synced via beats).
 var STRUM_BEAT_STEP = 0.03;
@@ -264,18 +268,52 @@ var SPIRAL_ECHO_DELAY_BEATS = 1 / 11;
 var SPIRAL_ECHO_DURATION_BEATS = 0.22;
 var CHANCE_COMPANION_STEPS = [-11, -6, -3, 3, 6, 9, 11];
 
-function isWhiteSemitone(semitone) {
-  for (var i = 0; i < WHITE_KEY_INPUT_OFFSETS.length; i++) {
-    if (WHITE_KEY_INPUT_OFFSETS[i] === semitone) {
+function isTraditionalWhiteMode(mode) {
+  return mode === MODE_WHITE_TRAD_SAFE;
+}
+
+function isUtilityWhiteMode(mode) {
+  return mode === MODE_WHITE_UTIL_DOWN
+      || mode === MODE_WHITE_UTIL_UP
+      || mode === MODE_WHITE_UTIL_ZIGZAG
+      || mode === MODE_WHITE_UTIL_THIRDS
+      || mode === MODE_WHITE_UTIL_FIFTHS
+      || mode === MODE_WHITE_UTIL_MIRROR
+      || mode === MODE_WHITE_UTIL_OCTAVE_UP
+      || mode === MODE_WHITE_UTIL_DIR
+      || mode === MODE_WHITE_UTIL_DIR_INV
+      || mode === MODE_WHITE_UTIL_LEAST
+      || mode === MODE_WHITE_UTIL_LEAST_INV;
+}
+
+function whiteConfigForMode(mode) {
+  if (isTraditionalWhiteMode(mode)) {
+    return {
+      span: SEMITONES_PER_OCTAVE,
+      inputOffsets: WHITE_TRAD_INPUT_OFFSETS,
+      outputSteps: WHITE_TRAD_ELEVEN_STEPS
+    };
+  }
+
+  return {
+    span: ELEVEN_STEPS_PER_OCTAVE,
+    inputOffsets: WHITE_UTIL_INPUT_OFFSETS,
+    outputSteps: WHITE_UTIL_ELEVEN_STEPS
+  };
+}
+
+function isWhiteSemitone(semitone, config) {
+  for (var i = 0; i < config.inputOffsets.length; i++) {
+    if (config.inputOffsets[i] === semitone) {
       return true;
     }
   }
   return false;
 }
 
-function getLowerWhiteIndex(semitone) {
-  for (var i = WHITE_KEY_INPUT_OFFSETS.length - 1; i >= 0; i--) {
-    if (WHITE_KEY_INPUT_OFFSETS[i] <= semitone) {
+function getLowerWhiteIndex(semitone, config) {
+  for (var i = config.inputOffsets.length - 1; i >= 0; i--) {
+    if (config.inputOffsets[i] <= semitone) {
       return i;
     }
   }
@@ -320,6 +358,8 @@ function directionFromRecentNotes(currentPitch) {
 }
 
 function recordWhiteNote(noteNumber) {
+  var mode = getMode();
+  var config = whiteConfigForMode(mode);
   var baseNote = getBaseNote();
   if (lastBaseNote === null || baseNote !== lastBaseNote) {
     resetWhiteBuffer();
@@ -327,12 +367,12 @@ function recordWhiteNote(noteNumber) {
   }
 
   var inputIndex = noteNumber - baseNote;
-  var semitone = mod(inputIndex, ELEVEN_STEPS_PER_OCTAVE);
-  if (!isWhiteSemitone(semitone)) {
+  var semitone = mod(inputIndex, config.span);
+  if (!isWhiteSemitone(semitone, config)) {
     return;
   }
 
-  var whiteIndex = getLowerWhiteIndex(semitone);
+  var whiteIndex = getLowerWhiteIndex(semitone, config);
   whiteBuffer.push(whiteIndex);
   whiteCounts[whiteIndex] += 1;
 
@@ -415,51 +455,60 @@ function mapElevenatorInvert(noteNumber) {
 }
 
 function mapWhiteKeys(noteNumber, mode, direction) {
+  var config = whiteConfigForMode(mode);
   var baseNote = getBaseNote();
   var inputIndex = noteNumber - baseNote;
-  var octave = floorDiv(inputIndex, ELEVEN_STEPS_PER_OCTAVE);
-  var semitone = mod(inputIndex, ELEVEN_STEPS_PER_OCTAVE);
+  var octave = floorDiv(inputIndex, config.span);
+  var semitone = mod(inputIndex, config.span);
 
-  var isWhite = isWhiteSemitone(semitone);
-  var whiteIndex = getLowerWhiteIndex(semitone);
-  var stepOffset = WHITE_KEY_ELEVEN_STEPS[whiteIndex];
+  var isWhite = isWhiteSemitone(semitone, config);
+  var whiteIndex = getLowerWhiteIndex(semitone, config);
+  var stepOffset = config.outputSteps[whiteIndex];
 
   if (isWhite) {
     return elevenPitchMapForStepIndex(octave * ELEVEN_STEPS_PER_OCTAVE + stepOffset);
   }
 
   var step = 0;
-  if (mode === MODE_WHITE_UP) {
+  if (mode === MODE_WHITE_UTIL_UP) {
     step = 1;
-  } else if (mode === MODE_WHITE_ZIGZAG) {
-    // Zigzag: alternate up/down on black keys for a lopsided groove.
-    if (semitone === 1 || semitone === 7) {
+  } else if (mode === MODE_WHITE_TRAD_SAFE) {
+    // This is the only static 12-key traditional assignment that keeps the
+    // 11-step octave reset and avoids three adjacent same-pitch keys.
+    if (semitone === 1 || semitone === 3) {
       step = 1;
     } else {
       step = 0;
     }
-  } else if (mode === MODE_WHITE_THIRDS) {
+  } else if (mode === MODE_WHITE_UTIL_ZIGZAG) {
+    // Utility zigzag follows the compact 11-key spine and avoids 3-key repeats.
+    if (semitone === 3 || semitone === 9) {
+      step = 1;
+    } else {
+      step = 0;
+    }
+  } else if (mode === MODE_WHITE_UTIL_THIRDS) {
     step = 2;
-  } else if (mode === MODE_WHITE_FIFTHS) {
+  } else if (mode === MODE_WHITE_UTIL_FIFTHS) {
     step = 4;
-  } else if (mode === MODE_WHITE_MIRROR) {
+  } else if (mode === MODE_WHITE_UTIL_MIRROR) {
     step = (6 - whiteIndex) - whiteIndex;
-  } else if (mode === MODE_WHITE_OCTAVE_UP) {
+  } else if (mode === MODE_WHITE_UTIL_OCTAVE_UP) {
     step = 7;
-  } else if (mode === MODE_WHITE_DIR || mode === MODE_WHITE_DIR_INV) {
+  } else if (mode === MODE_WHITE_UTIL_DIR || mode === MODE_WHITE_UTIL_DIR_INV) {
     var dir = direction || 1;
-    if (mode === MODE_WHITE_DIR_INV) {
+    if (mode === MODE_WHITE_UTIL_DIR_INV) {
       dir = -dir;
     }
     step = dir > 0 ? 1 : 0;
-  } else if (mode === MODE_WHITE_LEAST || mode === MODE_WHITE_LEAST_INV) {
-    var targetIndex = getLeastUsedIndex(mode === MODE_WHITE_LEAST_INV, whiteIndex, true);
+  } else if (mode === MODE_WHITE_UTIL_LEAST || mode === MODE_WHITE_UTIL_LEAST_INV) {
+    var targetIndex = getLeastUsedIndex(mode === MODE_WHITE_UTIL_LEAST_INV, whiteIndex, true);
     step = targetIndex - whiteIndex;
   }
 
   var targetIndex = whiteIndex + step;
-  var extraOctave = floorDiv(targetIndex, 7);
-  var targetOffset = WHITE_KEY_ELEVEN_STEPS[mod(targetIndex, 7)];
+  var extraOctave = floorDiv(targetIndex, config.outputSteps.length);
+  var targetOffset = config.outputSteps[mod(targetIndex, config.outputSteps.length)];
   var stepIndex = (octave + extraOctave) * ELEVEN_STEPS_PER_OCTAVE + targetOffset;
   return elevenPitchMapForStepIndex(stepIndex);
 }
@@ -492,6 +541,14 @@ function mapScaleLock(noteNumber, scale) {
   }
 
   return elevenPitchMapForStepIndex(octave * ELEVEN_STEPS_PER_OCTAVE + bestOffset);
+}
+
+function mapStepPattern(noteNumber, pattern) {
+  var baseNote = getBaseNote();
+  var inputIndex = noteNumber - baseNote;
+  var octave = floorDiv(inputIndex, ELEVEN_STEPS_PER_OCTAVE);
+  var step = mod(inputIndex, ELEVEN_STEPS_PER_OCTAVE);
+  return elevenPitchMapForStepIndex(octave * ELEVEN_STEPS_PER_OCTAVE + pattern[step]);
 }
 
 function mapDrunkWobble(noteNumber) {
@@ -554,7 +611,7 @@ function mapPitch(noteNumber) {
   if (mode === MODE_ELEVENATOR_INVERT) return mapElevenatorInvert(noteNumber);
   if (mode === MODE_NEGATIVE_HARMONY) return mapNegativeHarmony(noteNumber);
   if (mode === MODE_WHOLE_TONE) return mapScaleLock(noteNumber, SCALE_WHOLE_TONE);
-  if (mode === MODE_PENTATONIC) return mapScaleLock(noteNumber, SCALE_PENTATONIC_MINOR);
+  if (mode === MODE_PENTATONIC) return mapStepPattern(noteNumber, PENTATONIC_CLIMB_STEPS);
   if (mode === MODE_DRUNK) return mapDrunkWobble(noteNumber);
   if (mode === MODE_MIRROR_TRICK) return mapMirrorTrick(noteNumber);
   if (isMultiNoteMode(mode)) return mapElevenator(noteNumber);
@@ -564,17 +621,17 @@ function mapPitch(noteNumber) {
 
 function mapPitchWithDirection(noteNumber, direction) {
   var mode = getMode();
-  if (mode === MODE_WHITE_DIR || mode === MODE_WHITE_DIR_INV) {
+  if (mode === MODE_WHITE_UTIL_DIR || mode === MODE_WHITE_UTIL_DIR_INV) {
     return mapWhiteKeys(noteNumber, mode, direction);
   }
   return mapPitch(noteNumber);
 }
 
 function usesStableMapping(mode) {
-  return mode === MODE_WHITE_DIR
-      || mode === MODE_WHITE_DIR_INV
-      || mode === MODE_WHITE_LEAST
-      || mode === MODE_WHITE_LEAST_INV
+  return mode === MODE_WHITE_UTIL_DIR
+      || mode === MODE_WHITE_UTIL_DIR_INV
+      || mode === MODE_WHITE_UTIL_LEAST
+      || mode === MODE_WHITE_UTIL_LEAST_INV
       || mode === MODE_DRUNK
       || mode === MODE_MIRROR_TRICK;
 }
@@ -676,7 +733,7 @@ function HandleMIDI(event) {
 
     var mappedPitch = null;
     if (usesStableMapping(mode)) {
-      if (mode === MODE_WHITE_DIR || mode === MODE_WHITE_DIR_INV) {
+      if (mode === MODE_WHITE_UTIL_DIR || mode === MODE_WHITE_UTIL_DIR_INV) {
         var direction = directionFromRecentNotes(event.pitch);
         mappedPitch = mapPitchWithDirection(event.pitch, direction);
       } else {

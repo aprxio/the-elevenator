@@ -1,6 +1,6 @@
 # Elevenator
 
-![Elevenator](elevenator.png)
+![Elevenator](elevenator.jpg)
 
 Elevenator is a Logic Pro Scripter plugin that re-spaces the keyboard into 11 equal pitch steps per octave. Move up 11 physical semitone keys and the sound has climbed a full octave, so each step is about 109.09 cents instead of the usual 100.
 
@@ -23,21 +23,26 @@ Elevenator is a Logic Pro Scripter plugin that re-spaces the keyboard into 11 eq
 4. Select [Elevenator.js](Elevenator.js).
 5. Play the keyboard and adjust **Base Note** and **Mode** to taste.
 
+## Layout Verification
+
+Run `node test-layouts.js` to print the generated keyboard layout for every mode. The checked-in [MODE_LAYOUTS.md](MODE_LAYOUTS.md) report shows the current C..B layout and repeated adjacent pitch runs for comparison.
+
 ### White-key modes
 
-White-key modes use a seven-note white-style spine inside each 11-key octave, and the notes they emit stay in the 11-EDO scale.
+There are two white-key families. Traditional keeps the physical 12-key white/black keyboard shape, while Util modes use a compact 11-key white-style spine and treat the black slots as utility controls.
 
-- **White Keys: Down** maps black keys down to the nearest white key.
-- **White Keys: Up** maps black keys up to the nearest white key.
-- **White Keys: Zigzag** alternates black keys up or down for a skewed contour.
-- **White Keys: Thirds** maps black keys up two white steps.
-- **White Keys: Fifths** maps black keys up four white steps.
-- **White Keys: Mirror** reflects black keys around the white-key spine of the octave.
-- **White Keys: Octave Up** maps black keys up one white-key octave.
-- **White Keys: Direction** maps black keys up or down based on the order of the previous two note-ons.
-- **White Keys: Direction Invert** flips the direction rule for the same motion.
-- **White Keys: Least Used** maps black keys to the least-used white step in recent memory.
-- **White Keys: Least Used Invert** maps black keys to the most-used white step.
+- **White Traditional: Safe** maps the traditional black keys to adjacent white keys with the only static 12-key pattern that preserves the 11-step octave reset without creating three adjacent same-pitch keys.
+- **White Util: Down** maps utility keys down to the nearest spine key.
+- **White Util: Up** maps utility keys up to the nearest spine key.
+- **White Util: Zigzag** alternates utility keys without creating three adjacent same-pitch keys.
+- **White Util: Thirds** maps utility keys up two spine steps.
+- **White Util: Fifths** maps utility keys up four spine steps.
+- **White Util: Mirror** reflects utility keys around the spine.
+- **White Util: Octave Up** maps utility keys up one white-style octave.
+- **White Util: Direction** maps utility keys up or down based on the order of the previous two note-ons.
+- **White Util: Direction Invert** flips the direction rule for the same motion.
+- **White Util: Least Used** maps utility keys to the least-used spine step in recent memory.
+- **White Util: Least Used Invert** maps utility keys to the most-used spine step.
 
 ### Chord modes
 
@@ -59,7 +64,7 @@ Each held key becomes the root of an 11-step-octave chord. Upper voices come in 
 
 - **Negative Harmony** reflects each pitch inside the 11-step octave.
 - **Whole Tone Lock** snaps every input to the nearest whole-tone-like degree in the 11-step octave.
-- **Pentatonic Lock** snaps every input to the nearest minor-pentatonic-like degree in the 11-step octave.
+- **Pentatonic Climb** uses minor-pentatonic-like degrees as a climbing pattern instead of collapsing nearby keys into large dead zones.
 
 ### Crazy modes
 
