@@ -1,14 +1,14 @@
 # Elevenator
 
-![Elevenator](elevenator.jpg)
+![Elevenator](elevenator.png)
 
 Elevenator is a Logic Pro Scripter plugin that re-spaces the keyboard into 11 equal pitch steps per octave. Move up 11 physical semitone keys and the sound has climbed a full octave, so each step is about 109.09 cents instead of the usual 100.
 
 ## How it works
 
 - Every 11 physical semitone keys span one full octave.
-- The core Elevenator modes use per-note detune, so the pitch steps are evenly spaced instead of using a skipped MIDI note.
-- The rest of the modes build playable constraints, chords, echoes, and accidents on top of that tuning.
+- Every mode ends in the same 11-EDO output, using per-note detune instead of skipped MIDI notes.
+- The performance modes build playable constraints, chords, echoes, and accidents on top of that tuning.
 
 ## Controls
 
@@ -25,6 +25,8 @@ Elevenator is a Logic Pro Scripter plugin that re-spaces the keyboard into 11 eq
 
 ### White-key modes
 
+White-key modes use a seven-note white-style spine inside each 11-key octave, and the notes they emit stay in the 11-EDO scale.
+
 - **White Keys: Down** maps black keys down to the nearest white key.
 - **White Keys: Up** maps black keys up to the nearest white key.
 - **White Keys: Zigzag** alternates black keys up or down for a skewed contour.
@@ -32,7 +34,7 @@ Elevenator is a Logic Pro Scripter plugin that re-spaces the keyboard into 11 eq
 - **White Keys: Fifths** maps black keys up four white steps.
 - **White Keys: Mirror** reflects black keys around the white-key spine of the octave.
 - **White Keys: Octave Up** maps black keys up one white-key octave.
-- **White Keys: Direction** maps black keys up or down based on playing direction.
+- **White Keys: Direction** maps black keys up or down based on the order of the previous two note-ons.
 - **White Keys: Direction Invert** flips the direction rule for the same motion.
 - **White Keys: Least Used** maps black keys to the least-used white step in recent memory.
 - **White Keys: Least Used Invert** maps black keys to the most-used white step.
@@ -55,14 +57,14 @@ Each held key becomes the root of an 11-step-octave chord. Upper voices come in 
 
 ### Harmony modes
 
-- **Negative Harmony** reflects each pitch around the axis between Eb and E within the octave, so C major lines become G minor lines.
-- **Whole Tone Lock** snaps every input to the nearest whole-tone scale degree relative to the base note.
-- **Pentatonic Lock** snaps every input to the nearest minor pentatonic scale degree relative to the base note.
+- **Negative Harmony** reflects each pitch inside the 11-step octave.
+- **Whole Tone Lock** snaps every input to the nearest whole-tone-like degree in the 11-step octave.
+- **Pentatonic Lock** snaps every input to the nearest minor-pentatonic-like degree in the 11-step octave.
 
 ### Crazy modes
 
-- **Drunk Pianist** offsets each new note by a random semitone in the range [-1, +1]. The offset is locked through the note-off so notes do not get stuck.
-- **Mirror Trick** lets every other note pass through unchanged; the alternating notes reflect around the base note, creating skewed melodic contours.
+- **Drunk Pianist** offsets each new note by a random 11-EDO step in the range [-1, +1]. The offset is locked through the note-off so notes do not get stuck.
+- **Mirror Trick** lets every other note use the normal 11-EDO mapping; the alternating notes reflect around the base note, creating skewed melodic contours.
 - **Chaos: Chance Companion** adds one random 11-EDO harmony note, sometimes followed by a second delayed companion.
 
 ### Time-based modes
@@ -86,7 +88,7 @@ Elevenator Invert flips pitch direction while keeping the 11-step octave, so hig
 
 - This script only remaps note-on and note-off events; everything else passes through.
 - The 11-EDO modes rely on per-note detune support in Logic Pro Scripter instruments.
-- Direction modes follow your note-on motion; note-off stays locked to the original mapping.
+- Direction modes follow the trend of the previous two note-ons, falling back to current-vs-previous motion at the start of a phrase; note-off stays locked to the original mapping.
 - Least-used modes follow recent white-key motion; ties rotate for more variance, and note-off stays locked to the original mapping.
 - All remapped note-offs are tied to the note-on mapping, so switching modes while holding notes is less likely to leave stuck notes.
 - If it feels unfamiliar, that is the point: a precise detour, not a malfunction.

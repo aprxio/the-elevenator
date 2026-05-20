@@ -174,11 +174,14 @@ function elevenPitchFloatForIndex(inputIndex) {
   return getBaseNote() + inputIndex * ELEVEN_STEP_SEMITONES;
 }
 
+function elevenPitchMapForStepIndex(stepIndex) {
+  return pitchMapFromFloat(elevenPitchFloatForIndex(stepIndex));
+}
+
 function elevenPitchMapForStepOffset(rootPitch, stepOffset) {
   var baseNote = getBaseNote();
   var rootIndex = rootPitch - baseNote;
-  var pitchFloat = elevenPitchFloatForIndex(rootIndex + stepOffset);
-  return pitchMapFromFloat(pitchFloat);
+  return elevenPitchMapForStepIndex(rootIndex + stepOffset);
 }
 
 function sendMappedNoteOn(channel, velocity, mapped, delayBeats) {
@@ -226,7 +229,8 @@ function getMode() {
   return Math.round(GetParameter(PARAM_MODE));
 }
 
-var WHITE_OFFSETS = [0, 2, 4, 5, 7, 9, 11];
+var WHITE_KEY_INPUT_OFFSETS = [0, 2, 4, 5, 6, 8, 10];
+var WHITE_KEY_ELEVEN_STEPS = [0, 2, 4, 5, 6, 8, 10];
 var WHITE_BUFFER_SIZE = 16;
 var SEMITONES_PER_OCTAVE = 12;
 var ELEVEN_STEPS_PER_OCTAVE = 11;
@@ -236,6 +240,7 @@ var whiteCounts = [0, 0, 0, 0, 0, 0, 0];
 var whiteBuffer = [];
 var lastBaseNote = null;
 var lastNoteOn = null;
+var recentNoteOns = [];
 var activeMap = {};
 var leastStepCounter = 0;
 
@@ -246,7 +251,7 @@ var chordActiveMap = {};
 var mirrorToggle = 0;
 
 var SCALE_WHOLE_TONE = [0, 2, 4, 6, 8, 10];
-var SCALE_PENTATONIC_MINOR = [0, 3, 5, 7, 10];
+var SCALE_PENTATONIC_MINOR = [0, 3, 5, 6, 9];
 
 // Time-based mode constants (all tempo-synced via beats).
 var STRUM_BEAT_STEP = 0.03;
@@ -260,8 +265,8 @@ var SPIRAL_ECHO_DURATION_BEATS = 0.22;
 var CHANCE_COMPANION_STEPS = [-11, -6, -3, 3, 6, 9, 11];
 
 function isWhiteSemitone(semitone) {
-  for (var i = 0; i < WHITE_OFFSETS.length; i++) {
-    if (WHITE_OFFSETS[i] === semitone) {
+  for (var i = 0; i < WHITE_KEY_INPUT_OFFSETS.length; i++) {
+    if (WHITE_KEY_INPUT_OFFSETS[i] === semitone) {
       return true;
     }
   }
@@ -269,8 +274,8 @@ function isWhiteSemitone(semitone) {
 }
 
 function getLowerWhiteIndex(semitone) {
-  for (var i = WHITE_OFFSETS.length - 1; i >= 0; i--) {
-    if (WHITE_OFFSETS[i] <= semitone) {
+  for (var i = WHITE_KEY_INPUT_OFFSETS.length - 1; i >= 0; i--) {
+    if (WHITE_KEY_INPUT_OFFSETS[i] <= semitone) {
       return i;
     }
   }
@@ -282,6 +287,38 @@ function resetWhiteBuffer() {
   whiteBuffer = [];
 }
 
+function rememberNoteOn(noteNumber) {
+  lastNoteOn = noteNumber;
+  recentNoteOns.push(noteNumber);
+  if (recentNoteOns.length > 2) {
+    recentNoteOns.shift();
+  }
+}
+
+function directionFromRecentNotes(currentPitch) {
+  if (recentNoteOns.length >= 2) {
+    var older = recentNoteOns[0];
+    var newer = recentNoteOns[1];
+    if (newer > older) {
+      return 1;
+    }
+    if (newer < older) {
+      return -1;
+    }
+  }
+
+  if (lastNoteOn !== null) {
+    if (currentPitch < lastNoteOn) {
+      return -1;
+    }
+    if (currentPitch > lastNoteOn) {
+      return 1;
+    }
+  }
+
+  return 1;
+}
+
 function recordWhiteNote(noteNumber) {
   var baseNote = getBaseNote();
   if (lastBaseNote === null || baseNote !== lastBaseNote) {
@@ -290,7 +327,7 @@ function recordWhiteNote(noteNumber) {
   }
 
   var inputIndex = noteNumber - baseNote;
-  var semitone = mod(inputIndex, 12);
+  var semitone = mod(inputIndex, ELEVEN_STEPS_PER_OCTAVE);
   if (!isWhiteSemitone(semitone)) {
     return;
   }
@@ -380,15 +417,15 @@ function mapElevenatorInvert(noteNumber) {
 function mapWhiteKeys(noteNumber, mode, direction) {
   var baseNote = getBaseNote();
   var inputIndex = noteNumber - baseNote;
-  var octave = floorDiv(inputIndex, 12);
-  var semitone = mod(inputIndex, 12);
+  var octave = floorDiv(inputIndex, ELEVEN_STEPS_PER_OCTAVE);
+  var semitone = mod(inputIndex, ELEVEN_STEPS_PER_OCTAVE);
 
   var isWhite = isWhiteSemitone(semitone);
   var whiteIndex = getLowerWhiteIndex(semitone);
-  var offset = WHITE_OFFSETS[whiteIndex];
+  var stepOffset = WHITE_KEY_ELEVEN_STEPS[whiteIndex];
 
   if (isWhite) {
-    return baseNote + octave * 12 + offset;
+    return elevenPitchMapForStepIndex(octave * ELEVEN_STEPS_PER_OCTAVE + stepOffset);
   }
 
   var step = 0;
@@ -396,7 +433,7 @@ function mapWhiteKeys(noteNumber, mode, direction) {
     step = 1;
   } else if (mode === MODE_WHITE_ZIGZAG) {
     // Zigzag: alternate up/down on black keys for a lopsided groove.
-    if (semitone === 1 || semitone === 6 || semitone === 10) {
+    if (semitone === 1 || semitone === 7) {
       step = 1;
     } else {
       step = 0;
@@ -422,79 +459,56 @@ function mapWhiteKeys(noteNumber, mode, direction) {
 
   var targetIndex = whiteIndex + step;
   var extraOctave = floorDiv(targetIndex, 7);
-  var targetOffset = WHITE_OFFSETS[mod(targetIndex, 7)] + extraOctave * 12;
-  var mapped = baseNote + octave * 12 + targetOffset;
-
-  if (mapped < 0 || mapped > 127) {
-    return null;
-  }
-
-  return mapped;
+  var targetOffset = WHITE_KEY_ELEVEN_STEPS[mod(targetIndex, 7)];
+  var stepIndex = (octave + extraOctave) * ELEVEN_STEPS_PER_OCTAVE + targetOffset;
+  return elevenPitchMapForStepIndex(stepIndex);
 }
 
-// Negative harmony, modal flavour: reflect each pitch around the line halfway
-// between Eb and E (the tritone of A). new = (7 - semitone) mod 12.
-// The octave is preserved so the part stays in register.
+// Negative harmony in the 11-step octave. The input step is reflected inside
+// its current 11-step band, then converted through the shared 11-EDO output.
 function mapNegativeHarmony(noteNumber) {
   var baseNote = getBaseNote();
   var inputIndex = noteNumber - baseNote;
-  var octave = floorDiv(inputIndex, 12);
-  var semitone = mod(inputIndex, 12);
-  var newSemitone = mod(7 - semitone, 12);
-  var mapped = baseNote + octave * 12 + newSemitone;
-
-  if (mapped < 0 || mapped > 127) {
-    return null;
-  }
-  return mapped;
+  var octave = floorDiv(inputIndex, ELEVEN_STEPS_PER_OCTAVE);
+  var step = mod(inputIndex, ELEVEN_STEPS_PER_OCTAVE);
+  var newStep = mod(7 - step, ELEVEN_STEPS_PER_OCTAVE);
+  return elevenPitchMapForStepIndex(octave * ELEVEN_STEPS_PER_OCTAVE + newStep);
 }
 
 function mapScaleLock(noteNumber, scale) {
   var baseNote = getBaseNote();
   var inputIndex = noteNumber - baseNote;
-  var octave = floorDiv(inputIndex, 12);
-  var semitone = mod(inputIndex, 12);
+  var octave = floorDiv(inputIndex, ELEVEN_STEPS_PER_OCTAVE);
+  var step = mod(inputIndex, ELEVEN_STEPS_PER_OCTAVE);
 
   var bestOffset = scale[0];
   var bestDistance = 999;
   for (var i = 0; i < scale.length; i++) {
-    var d = Math.abs(scale[i] - semitone);
+    var d = Math.abs(scale[i] - step);
     if (d < bestDistance) {
       bestDistance = d;
       bestOffset = scale[i];
     }
   }
 
-  var mapped = baseNote + octave * 12 + bestOffset;
-  if (mapped < 0 || mapped > 127) {
-    return null;
-  }
-  return mapped;
+  return elevenPitchMapForStepIndex(octave * ELEVEN_STEPS_PER_OCTAVE + bestOffset);
 }
 
 function mapDrunkWobble(noteNumber) {
   var wobble = Math.floor(Math.random() * 3) - 1;
-  var mapped = noteNumber + wobble;
-  if (mapped < 0 || mapped > 127) {
-    return null;
-  }
-  return mapped;
+  return elevenPitchMapForStepOffset(noteNumber, wobble);
 }
 
-// Mirror Trick toggles each note: even hits pass through, odd hits reflect
-// around the base note.
+// Mirror Trick toggles each note: even hits use the normal 11-EDO mapping,
+// odd hits reflect around the base note in the same 11-step space.
 function mapMirrorTrick(noteNumber) {
   mirrorToggle += 1;
   if (mirrorToggle % 2 === 0) {
-    return noteNumber;
+    return mapElevenator(noteNumber);
   }
   var baseNote = getBaseNote();
   var diff = noteNumber - baseNote;
-  var mapped = baseNote - diff;
-  if (mapped < 0 || mapped > 127) {
-    return null;
-  }
-  return mapped;
+  return elevenPitchMapForStepIndex(-diff);
 }
 
 function chordIntervalsForMode(mode) {
@@ -543,7 +557,7 @@ function mapPitch(noteNumber) {
   if (mode === MODE_PENTATONIC) return mapScaleLock(noteNumber, SCALE_PENTATONIC_MINOR);
   if (mode === MODE_DRUNK) return mapDrunkWobble(noteNumber);
   if (mode === MODE_MIRROR_TRICK) return mapMirrorTrick(noteNumber);
-  if (isMultiNoteMode(mode)) return noteNumber;
+  if (isMultiNoteMode(mode)) return mapElevenator(noteNumber);
 
   return mapWhiteKeys(noteNumber, mode, 1);
 }
@@ -634,7 +648,7 @@ function handleMultiNoteOn(event) {
   }
 
   chordActiveMap[noteKey(event)] = tiedMaps;
-  lastNoteOn = rootPitch;
+  rememberNoteOn(rootPitch);
 }
 
 function handleMultiNoteOff(event) {
@@ -663,10 +677,7 @@ function HandleMIDI(event) {
     var mappedPitch = null;
     if (usesStableMapping(mode)) {
       if (mode === MODE_WHITE_DIR || mode === MODE_WHITE_DIR_INV) {
-        var direction = 1;
-        if (lastNoteOn !== null && event.pitch < lastNoteOn) {
-          direction = -1;
-        }
+        var direction = directionFromRecentNotes(event.pitch);
         mappedPitch = mapPitchWithDirection(event.pitch, direction);
       } else {
         mappedPitch = mapPitch(event.pitch);
@@ -676,7 +687,7 @@ function HandleMIDI(event) {
       mappedPitch = mapPitch(event.pitch);
       activeMap[key] = normalizePitchMap(mappedPitch);
     }
-    lastNoteOn = event.pitch;
+    rememberNoteOn(event.pitch);
 
     if (!applyPitchMapToNoteOn(event, mappedPitch)) {
       return;
