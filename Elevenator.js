@@ -1,12 +1,13 @@
-// Logic Pro Scripter: Elevenator (11 equal steps per octave)
+// Logic Pro Scripter: Elevenator (tunable physical keys per octave)
 
 var PARAM_BASE_NOTE = 0;
 var PARAM_MODE = 1;
+var PARAM_KEYS_PER_OCTAVE = 2;
 
 var MODE_NAMES = [
-  "Elevenator (11-EDO)",
-  "Elevenator Reverse (11-EDO)",
-  "Elevenator Invert (11-EDO)",
+  "Elevenator Ratio",
+  "Elevenator Reverse",
+  "Elevenator Invert",
   "White Traditional: Safe",
   "White Util: Down",
   "White Util: Up",
@@ -93,6 +94,14 @@ var PluginParameters = [
     type: "menu",
     valueStrings: MODE_NAMES,
     defaultValue: 0
+  },
+  {
+    name: "Keys Per Octave",
+    type: "lin",
+    minValue: 5,
+    maxValue: 24,
+    numberOfSteps: 19,
+    defaultValue: 11
   }
 ];
 
@@ -173,7 +182,7 @@ function applyPitchMapToNoteOff(event, mapped) {
 }
 
 function elevenPitchFloatForIndex(inputIndex) {
-  return getBaseNote() + inputIndex * ELEVEN_STEP_SEMITONES;
+  return getBaseNote() + inputIndex * getRatioStepSemitones();
 }
 
 function elevenPitchMapForStepIndex(stepIndex) {
@@ -231,6 +240,18 @@ function getMode() {
   return Math.round(GetParameter(PARAM_MODE));
 }
 
+function getKeysPerOctave() {
+  var value = Math.round(GetParameter(PARAM_KEYS_PER_OCTAVE));
+  if (value < 1) {
+    return ELEVEN_STEPS_PER_OCTAVE;
+  }
+  return value;
+}
+
+function getRatioStepSemitones() {
+  return SEMITONES_PER_OCTAVE / getKeysPerOctave();
+}
+
 var WHITE_TRAD_INPUT_OFFSETS = [0, 2, 4, 5, 7, 9, 11];
 var WHITE_TRAD_ELEVEN_STEPS = [0, 2, 4, 5, 7, 9, 11];
 var WHITE_UTIL_INPUT_OFFSETS = [0, 2, 4, 5, 6, 8, 10];
@@ -238,7 +259,6 @@ var WHITE_UTIL_ELEVEN_STEPS = [0, 2, 4, 5, 6, 8, 10];
 var WHITE_BUFFER_SIZE = 16;
 var SEMITONES_PER_OCTAVE = 12;
 var ELEVEN_STEPS_PER_OCTAVE = 11;
-var ELEVEN_STEP_SEMITONES = SEMITONES_PER_OCTAVE / ELEVEN_STEPS_PER_OCTAVE;
 var CENTS_PER_SEMITONE = 100;
 var whiteCounts = [0, 0, 0, 0, 0, 0, 0];
 var whiteBuffer = [];
@@ -428,29 +448,30 @@ function getLeastUsedIndex(invert, fallbackIndex, advanceCounter) {
   return index;
 }
 
-// True 11-EDO: eleven physical semitone steps span one full octave.
-// Each step is 1200 / 11 cents, so every interval is wider than 12-TET.
+// Ratio tuning: by default eleven physical semitone keys span one full octave.
+// Raising Keys Per Octave compresses the steps; lowering it stretches them.
 function mapElevenator(noteNumber) {
   return pitchMapFromFloat(elevenPitchFloatForIndex(noteNumber - getBaseNote()));
 }
 
-// Reverse runs each 11-step octave band backward while the octave anchors still
+// Reverse runs each ratio octave band backward while the octave anchors still
 // land in order. It makes scalar playing fold back on itself.
 function mapElevenatorReverse(noteNumber) {
   var baseNote = getBaseNote();
   var inputIndex = noteNumber - baseNote;
-  var octave = floorDiv(inputIndex, ELEVEN_STEPS_PER_OCTAVE);
-  var step = mod(inputIndex, ELEVEN_STEPS_PER_OCTAVE);
-  var reversedStep = step === 0 ? 0 : ELEVEN_STEPS_PER_OCTAVE - step;
-  var pitchFloat = baseNote + octave * SEMITONES_PER_OCTAVE + reversedStep * ELEVEN_STEP_SEMITONES;
+  var keysPerOctave = getKeysPerOctave();
+  var octave = floorDiv(inputIndex, keysPerOctave);
+  var step = mod(inputIndex, keysPerOctave);
+  var reversedStep = step === 0 ? 0 : keysPerOctave - step;
+  var pitchFloat = baseNote + octave * SEMITONES_PER_OCTAVE + reversedStep * getRatioStepSemitones();
   return pitchMapFromFloat(pitchFloat);
 }
 
-// Inverted 11-EDO: higher keys fall and lower keys rise around the base note.
+// Inverted ratio tuning: higher keys fall and lower keys rise around the base note.
 function mapElevenatorInvert(noteNumber) {
   var baseNote = getBaseNote();
   var inputIndex = noteNumber - baseNote;
-  var pitchFloat = baseNote - inputIndex * ELEVEN_STEP_SEMITONES;
+  var pitchFloat = baseNote - inputIndex * getRatioStepSemitones();
   return pitchMapFromFloat(pitchFloat);
 }
 

@@ -4,11 +4,13 @@ var fs = require("fs");
 
 var currentMode = 0;
 var currentBase = 48;
+var currentKeysPerOctave = 11;
 var sentEvents = [];
 
 global.GetParameter = function (index) {
   if (index === 0) return currentBase;
   if (index === 1) return currentMode;
+  if (index === 2) return currentKeysPerOctave;
   return 0;
 };
 
@@ -220,10 +222,11 @@ function modeReport(mode) {
 }
 
 function markdownReport() {
+  currentKeysPerOctave = 11;
   var lines = [];
   lines.push("# Elevenator Mode Layouts");
   lines.push("");
-  lines.push("Generated from `Elevenator.js` with `Base Note = 48`.");
+  lines.push("Generated from `Elevenator.js` with `Base Note = 48` and `Keys Per Octave = 11`.");
   lines.push("");
   lines.push("- `s0` is the base pitch.");
   lines.push("- `s11` is the octave above the base.");
@@ -255,10 +258,33 @@ function markdownReport() {
       return run.mode + " " + run.from + "-" + run.to + " x" + run.count + " " + run.value;
     }).join("; "));
   }
+  lines.push("- Ratio sanity checks: `" + ratioFailures().length + "` failures.");
   lines.push("- `node test-layouts.js --check` fails if any static mode has 3 or more adjacent same-pitch keys.");
   lines.push("- White Traditional uses 12-key physical white/black geometry.");
   lines.push("- White Util modes use the compact 11-key utility spine.");
   return lines.join("\n") + "\n";
+}
+
+function ratioFailures() {
+  var failures = [];
+  var previousMode = currentMode;
+  var previousKeysPerOctave = currentKeysPerOctave;
+  currentMode = MODE_ELEVENATOR;
+
+  var ratios = [11, 12, 13];
+  for (var i = 0; i < ratios.length; i++) {
+    currentKeysPerOctave = ratios[i];
+    resetState();
+    var cents = centsFromPitchMap(mapPitch(currentBase + ratios[i]));
+    var centsAboveBase = Math.round((cents - currentBase * 100) * 1000) / 1000;
+    if (centsAboveBase !== 1200) {
+      failures.push("ratio " + ratios[i] + " maps key +" + ratios[i] + " to " + centsAboveBase + "c");
+    }
+  }
+
+  currentMode = previousMode;
+  currentKeysPerOctave = previousKeysPerOctave;
+  return failures;
 }
 
 function allExtendedRuns(minCount) {
@@ -284,12 +310,18 @@ if (process.argv.indexOf("--markdown") !== -1) {
   process.stdout.write(markdownReport());
 } else if (process.argv.indexOf("--check") !== -1) {
   var failures = [];
+  currentKeysPerOctave = 11;
   var longRuns = allExtendedRuns(3);
+  var ratioProblems = ratioFailures();
 
   if (longRuns.length > 0) {
     failures.push("Static modes have adjacent repeated pitch runs >= 3: " + longRuns.map(function (run) {
       return run.mode + " " + run.from + "-" + run.to + " " + run.value;
     }).join(", "));
+  }
+
+  if (ratioProblems.length > 0) {
+    failures.push("Ratio checks failed: " + ratioProblems.join(", "));
   }
 
   if (failures.length > 0) {

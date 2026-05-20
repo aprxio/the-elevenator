@@ -1,6 +1,6 @@
 # Elevenator Mode Layouts
 
-Generated from `Elevenator.js` with `Base Note = 48`.
+Generated from `Elevenator.js` with `Base Note = 48` and `Keys Per Octave = 11`.
 
 - `s0` is the base pitch.
 - `s11` is the octave above the base.
@@ -12,9 +12,9 @@ Generated from `Elevenator.js` with `Base Note = 48`.
 
 | # | Mode | C | C# | D | D# | E | F | F# | G | G# | A | A# | B | Adjacent repeats | C voices |
 |---:|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 0 | Elevenator (11-EDO) | s0 (0c) | s1 (109.091c) | s2 (218.182c) | s3 (327.273c) | s4 (436.364c) | s5 (545.455c) | s6 (654.545c) | s7 (763.636c) | s8 (872.727c) | s9 (981.818c) | s10 (1090.909c) | s11 (1200c) |  | s0 (0c) |
-| 1 | Elevenator Reverse (11-EDO) | s0 (0c) | s10 (1090.909c) | s9 (981.818c) | s8 (872.727c) | s7 (763.636c) | s6 (654.545c) | s5 (545.455c) | s4 (436.364c) | s3 (327.273c) | s2 (218.182c) | s1 (109.091c) | s11 (1200c) |  | s0 (0c) |
-| 2 | Elevenator Invert (11-EDO) | s0 (0c) | s-1 (-109.091c) | s-2 (-218.182c) | s-3 (-327.273c) | s-4 (-436.364c) | s-5 (-545.455c) | s-6 (-654.545c) | s-7 (-763.636c) | s-8 (-872.727c) | s-9 (-981.818c) | s-10 (-1090.909c) | s-11 (-1200c) |  | s0 (0c) |
+| 0 | Elevenator Ratio | s0 (0c) | s1 (109.091c) | s2 (218.182c) | s3 (327.273c) | s4 (436.364c) | s5 (545.455c) | s6 (654.545c) | s7 (763.636c) | s8 (872.727c) | s9 (981.818c) | s10 (1090.909c) | s11 (1200c) |  | s0 (0c) |
+| 1 | Elevenator Reverse | s0 (0c) | s10 (1090.909c) | s9 (981.818c) | s8 (872.727c) | s7 (763.636c) | s6 (654.545c) | s5 (545.455c) | s4 (436.364c) | s3 (327.273c) | s2 (218.182c) | s1 (109.091c) | s11 (1200c) |  | s0 (0c) |
+| 2 | Elevenator Invert | s0 (0c) | s-1 (-109.091c) | s-2 (-218.182c) | s-3 (-327.273c) | s-4 (-436.364c) | s-5 (-545.455c) | s-6 (-654.545c) | s-7 (-763.636c) | s-8 (-872.727c) | s-9 (-981.818c) | s-10 (-1090.909c) | s-11 (-1200c) |  | s0 (0c) |
 | 3 | White Traditional: Safe | s0 (0c) | s2 (218.182c) | s2 (218.182c) | s4 (436.364c) | s4 (436.364c) | s5 (545.455c) | s5 (545.455c) | s7 (763.636c) | s7 (763.636c) | s9 (981.818c) | s9 (981.818c) | s11 (1200c) | C#-D x2 s2 (218.182c)<br>D#-E x2 s4 (436.364c)<br>F-F# x2 s5 (545.455c)<br>G-G# x2 s7 (763.636c)<br>A-A# x2 s9 (981.818c) | s0 (0c) |
 | 4 | White Util: Down | s0 (0c) | s0 (0c) | s2 (218.182c) | s2 (218.182c) | s4 (436.364c) | s5 (545.455c) | s6 (654.545c) | s6 (654.545c) | s8 (872.727c) | s8 (872.727c) | s10 (1090.909c) | s11 (1200c) | C-C# x2 s0 (0c)<br>D-D# x2 s2 (218.182c)<br>F#-G x2 s6 (654.545c)<br>G#-A x2 s8 (872.727c) | s0 (0c) |
 | 5 | White Util: Up | s0 (0c) | s2 (218.182c) | s2 (218.182c) | s4 (436.364c) | s4 (436.364c) | s5 (545.455c) | s6 (654.545c) | s8 (872.727c) | s8 (872.727c) | s10 (1090.909c) | s10 (1090.909c) | s11 (1200c) | C#-D x2 s2 (218.182c)<br>D#-E x2 s4 (436.364c)<br>G-G# x2 s8 (872.727c)<br>A-A# x2 s10 (1090.909c) | s0 (0c) |
@@ -52,6 +52,7 @@ Generated from `Elevenator.js` with `Base Note = 48`.
 ## Checks
 
 - Static modes with adjacent runs >= 3 over 25 keys: `0`.
+- Ratio sanity checks: `0` failures.
 - `node test-layouts.js --check` fails if any static mode has 3 or more adjacent same-pitch keys.
 - White Traditional uses 12-key physical white/black geometry.
 - White Util modes use the compact 11-key utility spine.
