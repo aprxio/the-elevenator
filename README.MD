@@ -15,7 +15,7 @@ Elevenator is a Logic Pro Scripter plugin that lets you choose how many physical
 
 - **Base Note (C3=48):** The MIDI note number where the mapping starts.
 - **Layout:** Chromatic Ratio, White Traditional, or one of the White Util layouts.
-- **Mode:** Plain, Reverse, Invert, harmony, chord, echo, or chaos processing.
+- **Mode:** Basic 11 Semitone, Reverse, Invert, harmony, chord, echo, or chaos processing.
 - **Keys Per Octave:** The physical-key ratio for the octave span. `11` is the Elevenator default, `12` is the normal keyboard span, and values like `10` or `13` create more stretched or compressed tunings.
 
 ## Usage
@@ -87,7 +87,7 @@ These modes use the host beat clock, so the transport should be playing for them
 
 ## Quick example
 
-Default settings (Base Note 48, Chromatic Ratio layout, Plain mode, Keys Per Octave 11) mean C3 is still C3, but the next physical key is about 109.09 cents higher. Move up 11 keys on your keyboard and you land on the octave.
+Default settings (Base Note 48, Chromatic Ratio layout, Basic 11 Semitone mode, Keys Per Octave 11) mean C3 is still C3, but the next physical key is about 109.09 cents higher. Move up 11 keys on your keyboard and you land on the octave.
 
 Elevenator Reverse runs each ratio octave band backward while keeping the octave anchors in place, so scalar lines fold back before snapping to the next octave.
 

@@ -22,7 +22,7 @@ var LAYOUT_NAMES = [
 ];
 
 var MODE_NAMES = [
-  "Plain",
+  "Basic 11 Semitone",
   "Reverse",
   "Invert",
   "Negative Harmony",
